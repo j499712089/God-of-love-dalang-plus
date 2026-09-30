@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>女生档案库</title>
+<link rel="stylesheet" href="assets/detail.css">
+<style>
+:root{
+  --bg:#0b0d12; --surface:#12151d; --surface2:#181c26; --line:#242a38;
+  --txt:#e8eaf0; --txt2:#9aa3b8; --txt3:#5f687d;
+  --gold:#d4a656; --push:#4ade80; --watch:#fbbf24; --stop:#f87171;
+  --r:14px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--txt);
+  font:15px/1.65 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased}
+.hide{display:none!important}
+
+/* ---------- 顶栏 ---------- */
+.top{position:sticky;top:0;z-index:50;background:rgba(11,13,18,.92);
+  backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.top-in{max-width:1240px;margin:0 auto;padding:14px 24px;
+  display:flex;align-items:center;gap:16px}
+.brand{font-size:17px;font-weight:600;letter-spacing:.5px;white-space:nowrap}
+.brand em{color:var(--gold);font-style:normal}
+.search{flex:1;max-width:340px;position:relative}
+.search input{width:100%;background:var(--surface2);border:1px solid var(--line);
+  color:var(--txt);border-radius:9px;padding:9px 13px 9px 34px;font-size:14px;outline:none}
+.search input:focus{border-color:var(--gold)}
+.search span{position:absolute;left:11px;top:9px;color:var(--txt3);font-size:14px}
+.btn{background:var(--surface2);border:1px solid var(--line);color:var(--txt2);
+  padding:9px 15px;border-radius:9px;font-size:13.5px;cursor:pointer;
+  white-space:nowrap;transition:.15s}
+.btn:hover{border-color:var(--gold);color:var(--txt)}
+.btn-p{background:var(--gold);border-color:var(--gold);color:#1a1206;font-weight:600}
+.btn-p:hover{filter:brightness(1.1);color:#1a1206}
+
+.wrap{max-width:1240px;margin:0 auto;padding:26px 24px 80px}
+
+/* ---------- 统计 ---------- */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:26px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px}
+.stat b{display:block;font-size:27px;font-weight:600;letter-spacing:-.5px}
+.stat span{font-size:12.5px;color:var(--txt2)}
+.stat.p b{color:var(--push)} .stat.w b{color:var(--watch)} .stat.s b{color:var(--stop)}
+
+/* ---------- 排行榜 ---------- */
+.rank-box{background:linear-gradient(160deg,#1a1508,var(--surface) 55%);
+  border:1px solid #3a2f14;border-radius:var(--r);padding:19px 21px;margin-bottom:26px}
+.rank-hd{display:flex;align-items:baseline;gap:10px;margin-bottom:15px}
+.rank-hd h2{font-size:15.5px;font-weight:600}
+.rank-hd h2 i{color:var(--gold);font-style:normal;margin-right:6px}
+.rank-hd small{font-size:12px;color:var(--txt3)}
+.rank-row{display:flex;align-items:center;gap:13px;padding:9px 0;
+  border-top:1px solid rgba(255,255,255,.05);cursor:pointer}
+.rank-row:first-of-type{border-top:0}
+.rank-row:hover .rk-name{color:var(--gold)}
+.rk-no{width:26px;height:26px;flex:0 0 26px;border-radius:7px;display:grid;place-items:center;
+  font-size:12.5px;font-weight:700;background:var(--surface2);color:var(--txt3)}
+.rank-row:nth-of-type(1) .rk-no{background:linear-gradient(135deg,#d4a656,#8a6a26);color:#1a1206}
+.rank-row:nth-of-type(2) .rk-no{background:linear-gradient(135deg,#9aa3b8,#5f687d);color:#0b0d12}
+.rank-row:nth-of-type(3) .rk-no{background:linear-gradient(135deg,#b07a4a,#6d4826);color:#fff}
+.rk-name{width:82px;flex:0 0 82px;font-size:14px;font-weight:500;transition:.15s;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rk-plat{width:52px;flex:0 0 52px;font-size:11.5px;color:var(--txt3)}
+.rk-bar{flex:1;height:7px;background:var(--surface2);border-radius:4px;overflow:hidden}
+.rk-fill{height:100%;border-radius:4px;transition:width .5s cubic-bezier(.2,.8,.2,1)}
+.rk-val{width:40px;flex:0 0 40px;text-align:right;font-size:13.5px;font-weight:600;
+  font-variant-numeric:tabular-nums}
+.rk-vd{width:52px;flex:0 0 52px;text-align:right;font-size:11.5px}
+
+/* ---------- 筛选 ---------- */
+.filters{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.chip{background:var(--surface);border:1px solid var(--line);color:var(--txt2);
+  padding:6px 14px;border-radius:20px;font-size:13px;cursor:pointer;transition:.15s}
+.chip:hover{color:var(--txt)}
+.chip.on{background:var(--gold);border-color:var(--gold);color:#1a1206;font-weight:600}
+
+/* ---------- 卡片网格 ---------- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:15px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  padding:18px;cursor:pointer;position:relative;transition:.18s}
+.card:hover{border-color:var(--gold);transform:translateY(-2px)}
+.c-hd{display:flex;align-items:center;gap:12px;margin-bottom:13px}
+.av{width:44px;height:44px;flex:0 0 44px;border-radius:12px;display:grid;place-items:center;
+  font-size:18px;font-weight:600;background:linear-gradient(135deg,#2a3142,#1b2030);color:var(--gold)}
+.c-name{font-size:16px;font-weight:600;display:flex;align-items:center;gap:7px}
+.c-sub{font-size:12px;color:var(--txt3);margin-top:2px}
+.vd{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600}
+.vd.推进中{background:rgba(74,222,128,.14);color:var(--push)}
+.vd.观察中{background:rgba(251,191,36,.14);color:var(--watch)}
+.vd.已止损{background:rgba(248,113,113,.14);color:var(--stop)}
+.c-int{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+.c-int .bar{flex:1;height:6px;background:var(--surface2);border-radius:4px;overflow:hidden}
+.c-int .bar i{display:block;height:100%;border-radius:4px}
+.c-int b{font-size:14px;font-variant-numeric:tabular-nums;width:34px;text-align:right}
+.c-meta{display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt3);
+  border-top:1px solid var(--line);padding-top:11px}
+.c-add{display:grid;place-items:center;min-height:172px;border:1.5px dashed var(--line);
+  background:transparent;color:var(--txt3);font-size:13.5px;text-align:center}
+.c-add:hover{border-color:var(--gold);color:var(--gold)}
+.c-add div:first-child{font-size:26px;margin-bottom:5px;line-height:1}
+.empty{grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--txt3)}
+.onboard{text-align:left;padding:32px 28px;border:1px dashed var(--line);border-radius:var(--r);background:var(--surface)}
+.onboard .ob-t{font-size:17px;font-weight:600;color:var(--txt);margin-bottom:6px}
+.onboard .ob-p{font-size:13px;color:var(--txt2);margin-bottom:14px;line-height:1.7}
+.onboard .ob-w{font-size:13px;color:var(--txt2);line-height:1.8;padding:12px 14px;margin-bottom:10px;
+  background:var(--surface2);border-radius:10px;border-left:3px solid var(--gold)}
+.onboard .ob-w b{display:block;color:var(--txt);font-weight:600;margin-bottom:3px}
+.onboard .ob-tip{margin:4px 0 0;font-size:12px;color:var(--txt3)}
+@media(max-width:760px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .top-in{flex-wrap:wrap} .search{max-width:none;order:3;flex-basis:100%}
+  .rk-plat,.rk-vd{display:none}
+}
+</style>
+</head>
+<body>
+
+<div class="top"><div class="top-in">
+  <div class="brand">女生档案<em>库</em></div>
+  <div class="search"><span>⌕</span>
+    <input id="q" placeholder="搜索姓名 / 平台 / 标签…" oninput="render()"></div>
+  <button class="btn" onclick="rebuildHint()">同步说明</button>
+  <button class="btn btn-p" onclick="addProfile()">＋ 新增档案</button>
+</div></div>
+
+<!-- ========== 列表页 ========== -->
+<div class="wrap" id="listPage">
+  <div class="stats">
+    <div class="stat"><b id="s0">0</b><span>总档案</span></div>
+    <div class="stat p"><b id="s1">0</b><span>推进中</span></div>
+    <div class="stat w"><b id="s2">0</b><span>观察中</span></div>
+    <div class="stat s"><b id="s3">0</b><span>已止损</span></div>
+  </div>
+
+  <div class="rank-box">
+    <div class="rank-hd">
+      <h2><i>▲</i>兴趣度排行</h2>
+      <small id="rankTime">每次技能调用后自动重算</small>
+    </div>
+    <div id="rankList"></div>
+  </div>
+
+  <div class="api-status" id="apiStatus">静态看板：数据来自本目录 data/db.js；Agent 写入并重建后，刷新页面查看最新资料。</div>
+  <div class="filters">
+    <div class="chip on" data-f="all" onclick="setF(this)">全部</div>
+    <div class="chip" data-f="推进中" onclick="setF(this)">推进中</div>
+    <div class="chip" data-f="观察中" onclick="setF(this)">观察中</div>
+    <div class="chip" data-f="已止损" onclick="setF(this)">已止损</div>
+    <div style="flex:1"></div>
+    <button class="btn" onclick="location.reload()">↻ 刷新看板</button>
+    <button class="btn" onclick="rebuildHint()">📋 数据写入说明</button>
+  </div>
+
+  <div class="grid" id="grid"></div>
+</div>
+
+<!-- 详情页容器，由 detail.js 注入 -->
+<div class="wrap hide" id="detailPage"></div>
+
+<script src="data/db.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

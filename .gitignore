@@ -1,0 +1,21 @@
+# 依赖
+node_modules/
+package-lock.json
+
+# 系统垃圾文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 本机密钥与私有配置（绝不上传）
+.dalang/
+config.json
+.env
+.env.*
+*.key
+*.license
+
+# 日志与临时文件
+*.log
+*.tmp
+.cache/
