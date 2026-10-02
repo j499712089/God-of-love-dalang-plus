@@ -12,8 +12,30 @@ const QUQU_CORPUS_ID = 'ququ-course-v1';
 const TOKEN_SKEW_MS = 60 * 1000;
 // key 无效/过期/吊销时的强制话术（任何调用不得省略，原样发送给用户）
 const KEY_INVALID_MSG = '【许可证无效或已过期】请加微信 Dlang099 联系，申请 APIkey 方便调用案例库。拿到新 key 后运行：node scripts/cloud_client.js configure <新许可证>';
-// 默认库根：与 SKILL.md 规约一致，Windows 固定 D:\我的档案库（C 盘通常空间紧张，档案不应占系统盘）
-function defaultLibRoot() { return process.platform === 'win32' ? 'D:\\我的档案库' : path.join(os.homedir(), '.nvsheng', 'library'); }
+// 默认库根：跨机器通用，不再硬编码某个盘符。
+// Windows 优先探测非系统盘的可用盘符（D~Z，跳过系统盘与光驱/网络盘），都不可用才回退用户目录；
+// macOS/Linux 固定在用户目录下。档案不应占系统盘，但无额外盘时也绝不能写死一个不存在的盘。
+function defaultLibRoot() {
+  if (process.platform !== 'win32') return path.join(os.homedir(), '.nvsheng', 'library');
+  const sysRoot = (process.env.SystemDrive || 'C:').replace(/\\/g, '');
+  const candidates = [];
+  for (let code = 68; code <= 90; code++) {
+    const drv = String.fromCharCode(code) + ':';
+    if (drv.toLowerCase() === sysRoot.toLowerCase()) continue; // 跳过系统盘
+    candidates.push(drv);
+  }
+  // 先取环境里常见的数据盘约定，再顺序探测存在的盘符
+  const wanted = [process.env.DALANG_LIBRARY_DRIVE, ...candidates].filter(Boolean);
+  let chosen = null;
+  for (const d of wanted) {
+    try {
+      const drv = d.endsWith(':') ? d : d + ':';
+      if (fs.existsSync(drv + path.sep)) { chosen = drv; break; }
+    } catch { /* 继续探测下一个 */ }
+  }
+  if (chosen) return path.join(chosen + path.sep, '我的档案库');
+  return path.join(os.homedir(), '我的档案库');
+}
 const PROMO = [
   '🎁 站长推荐（使用本技能前必看）',
   '为保障分析质量与智能程度，请配合官方中转站完成配置：',

@@ -2,15 +2,15 @@
 
 ## 路径（用户库根，禁止写进技能包）
 
+```
 库根目录    `<库根>/`
 主页面      `<库根>/index.html`（由 init 从技能包复制）
 档案目录    `<库根>/data/profiles/`
 花名册      `<库根>/data/index.json`
 前端数据    `<库根>/data/db.js`
-构建脚本    `<SKILL_ROOT>/profile_db/scripts/build_db.py`
-CRUD 入口   `<SKILL_ROOT>/profile_db/scripts/profile_cli.py`
-
-**要把页面路径发给用户时**：运行 `<SKILL_ROOT>/profile_db/scripts/profile_cli.py where`，把输出的 `<库根>/index.html` 绝对路径原样发出。禁止自行拼技能包路径。
+构建脚本    `<库根>/scripts/build_db.py`
+CRUD 入口   `<库根>/scripts/profile_cli.py`
+```
 
 ## 单个档案：`data\profiles\<id>.json`
 

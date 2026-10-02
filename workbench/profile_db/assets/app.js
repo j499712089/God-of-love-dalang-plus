@@ -1,14 +1,9 @@
 /* 女生档案库 · 前端逻辑
-   数据源：同目录 data/db.js（由 Agent/CLI 自动重建）
-   编辑：生成待写入内容；真实落盘统一由 Agent/CLI 完成
+   数据源：data/db.js（window.ROSTER / window.PROFILES）
+   本地编辑覆盖层：localStorage['nvsheng_overrides']
    ------------------------------------------------------------------ */
 const LS = 'nvsheng_overrides';
 let FILTER = 'all';
-
-function refreshStaticBoard(){
-  render();
-  return true;
-}
 
 /* ---------- 数据层 ---------- */
 function overrides(){ try{ return JSON.parse(localStorage.getItem(LS)) || {}; }catch(e){ return {}; } }
@@ -47,6 +42,41 @@ function roster(){
 /* ---------- 工具 ---------- */
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const intColor = v => v>=70 ? 'var(--push)' : v>=40 ? 'var(--watch)' : 'var(--stop)';
+
+/* 头像：facts.头像 有值时渲染图片（加载失败自动移除，回退首字母） */
+function avHtml(p, cls){
+  const f = (p && p.facts) || {};
+  const src = f['头像'] || '';
+  const ini = esc(((p && p.name) || '?').slice(0,1));
+  const c = 'av' + (cls || '');
+  if(src){
+    return `<div class="${c}"><img src="${esc(src)}" alt="" loading="lazy" onerror="this.remove()"><span class="av-ini">${ini}</span></div>`;
+  }
+  return `<div class="${c}"><span class="av-ini">${ini}</span></div>`;
+}
+
+/* 兼容层：plan / position 的若干字段规范是数组，历史卡片写成字符串，
+   直接 .map() 会中断整页渲染。统一归一化，字符串与混合数组都能显示。 */
+function arr(v){
+  if(Array.isArray(v)) return v;
+  if(v==null || v==='') return [];
+  return [v];
+}
+function nList(v){
+  return arr(v).map(x=>(x && typeof x==='object') ? JSON.stringify(x) : String(x));
+}
+function nRounds(v){
+  return arr(v).map((x,i)=>{
+    if(x && typeof x==='object') return x;
+    const s = String(x);
+    const m = s.match(/^([^：:]{1,20})[：:]\s*(.+)$/);
+    return m ? {n:i+1, goal:m[1], line:m[2]} : {n:i+1, goal:'', line:s};
+  });
+}
+function nStop(v){
+  return arr(v).map(x=>(x && typeof x==='object') ? x : {signal:String(x), action:''});
+}
+
 function ago(ts){
   if(!ts) return '—';
   const d = Math.floor((Date.now()-ts)/86400000);
@@ -96,7 +126,7 @@ function render(){
     const sub = [f['年龄'],f['职业标签']||f['职业'],r.platform].filter(Boolean).join(' · ');
     return `<div class="card" onclick="openDetail('${r.id}')">
       <div class="c-hd">
-        <div class="av">${esc(r.name.slice(0,1))}</div>
+        ${avHtml(p,'')}
         <div>
           <div class="c-name">${esc(r.name)}<span class="vd ${r.verdict}">${r.verdict}</span></div>
           <div class="c-sub">${esc(sub)}</div>
@@ -113,36 +143,38 @@ function render(){
     </div>`;
   }).join('');
 
-  const libEmpty = !(window.ROSTER || []).length;
-  const emptyBlock = libEmpty ? `<div class="empty onboard">
-      <div class="ob-t">档案库还是空的</div>
-      <div class="ob-p">两种方式建第一张资料卡，任选其一：</div>
-      <div class="ob-w"><b>方式一（推荐）· 让 AI 建</b>
-        把女生的资料截图或简介发给 AI，说「用恋爱之神大浪_PLUS 分析这个女生」。
-        AI 会先问你要不要建档，答「建档」后自动写进这里，并跑满真实性核验、兴趣度打分和升温计划。</div>
-      <div class="ob-w"><b>方式二 · 自己建</b>
-        点下方「＋ 新增档案」，填昵称和平台，先占位，之后再补内容。</div>
-      <div class="ob-p ob-tip">以后每次聊天有新进展，把记录发给 AI，它会追加到该档案的互动时间线并重算分数。</div>
-    </div>` : `<div class="empty">没有匹配的档案</div>`;
-
   document.getElementById('grid').innerHTML =
-    (list.length ? cards : emptyBlock) +
+    (list.length ? cards : `<div class="empty">没有匹配的档案</div>`) +
     `<div class="card c-add" onclick="addProfile()"><div><div>＋</div><div>新增档案</div></div></div>`;
 }
 
 /* ---------- 增删 ---------- */
 function addProfile(){
-  alert('请把资料发给 Agent 建档。Agent 写入用户库并重建 data/db.js 后，刷新本页面即可看到。');
+  const name = prompt('女生昵称/姓名：'); if(!name) return;
+  const platform = prompt('平台（牵手/探探/SOUL/积目…）：') || '未填';
+  const id = 'x' + Date.now();
+  const ov = overrides();
+  ov[id] = {
+    id, name, platform, verdict:'观察中', truth_level:'未评',
+    interest_breakdown:{intent:0,speed:0,respond:0,match:0,truth:0,risk:0},
+    created:Date.now(), updated:Date.now(),
+    facts:{}, photos:[], truth_check:[], inferences:[],
+    position:{chance:[],risk:[]},
+    plan:{stage:'',opener:'',opener_why:[],rounds:[],invite_rules:[],stop_rules:[],funnel_note:''},
+    gaps:['资料待补全：请对 agent 发送资料截图 + 全面分析'], timeline:[], summary:''
+  };
+  saveOv(ov); render(); openDetail(id);
 }
 
 function delProfile(id){
   const p = allProfiles()[id];
-  if(!p || !confirm(`删除「${p.name}」的档案？`)) return;
-  flashHint('请让 Agent 执行 profile_cli.py delete --id '+id+'；刷新页面后显示最新数据。');
+  if(!confirm(`删除「${p.name}」的档案？此操作仅影响本页面显示，不删除 data/profiles 下的源文件。`)) return;
+  const ov = overrides(); ov[id] = null; saveOv(ov);
+  backToList();
 }
 
 function rebuildHint(){
-  alert('当前为静态看板模式：\n\n1. 页面字段退出输入框即自动保存到本机浏览器\n2. 页面立即回填并刷新当前卡片\n3. 关闭或刷新页面后，本机浏览器中的修改仍会保留\n4. Agent/CLI 写入源文件并 rebuild 后，清除本机覆盖即可回到源文件\n\n本页面不启动后端、不依赖端口；浏览器自动保存不等于改写 JSON 源文件。');
+  alert('数据同步流程\n\n1. agent 写入 data\\profiles\\<id>.json\n2. 运行 scripts\\build_db.py\n3. 刷新本页面\n\n页面内的手动编辑存于浏览器 localStorage，\n会覆盖显示 db.js 的同名字段；\n重建脚本不会清除这些编辑。');
 }
 
 /* ---------- 就地编辑 ---------- */
@@ -160,63 +192,14 @@ function patch(id, path, val){
   ov[id] = Object.assign(ov[id]||{}, cur); saveOv(ov);
 }
 
-/* 合并 localStorage 覆盖 + 源 profile → 生成 patch JSON（深合并，未改字段不输出） */
-function getMergedProfile(id){
-  const src = (window.PROFILES||{})[id] || {};
-  const ov = overrides()[id] || {};
-  return deepMerge(JSON.parse(JSON.stringify(src)), ov);
-}
-function deepMerge(a,b){
-  if(Array.isArray(b)) return JSON.parse(JSON.stringify(b));
-  if(b && typeof b==='object'){
-    const out = JSON.parse(JSON.stringify(a||{}));
-    for(const k of Object.keys(b)){ if(k==='id'||k==='updated'){out[k]=b[k];continue;} out[k]=deepMerge(out[k],b[k]); }
-    return out;
-  }
-  return b;
-}
-function exportPatch(id){
-  const merged = getMergedProfile(id);
-  const text = JSON.stringify(merged, null, 2);
-  const stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
-  const filename = `patch-${id}-${stamp}.json`;
-  // 下载
-  const blob = new Blob([text], {type:'application/json;charset=utf-8'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url), 1000);
-  // 复制到剪贴板（异步）
-  if(navigator.clipboard && navigator.clipboard.writeText){
-    navigator.clipboard.writeText(text).then(()=>{
-      flashHint('✓ 已下载 '+filename+'，内容已复制到剪贴板（直接粘给 agent 或用 CLI patch）');
-    }).catch(()=>flashHint('✓ 已下载 '+filename+'（剪贴板复制失败，请手动用 CLI）'));
-  } else {
-    flashHint('✓ 已下载 '+filename+'（请用 CLI：python scripts/profile_cli.py patch --id '+id+' --file '+filename+'）');
-  }
-}
-function flashHint(msg){
-  let h = document.getElementById('hintBar');
-  if(!h){ h=document.createElement('div'); h.id='hintBar'; h.style.cssText='position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#5a3b1c;color:#ffd9a0;padding:10px 18px;border-radius:8px;z-index:9999;box-shadow:0 4px 18px rgba(0,0,0,.5);font-size:13px;z-index=9999'; document.body.appendChild(h); }
-  h.textContent = msg; h.style.display='block';
-  clearTimeout(h._t); h._t = setTimeout(()=>{ h.style.display='none'; }, 4500);
-}
-function clearEdits(id){
-  const ov = overrides(); delete ov[id]; saveOv(ov); render(); renderDetail(id);
-  flashHint('✓ 已清空本机编辑，恢复源文件显示');
-}
-
 function edit(el, id, path){
   const old = el.textContent.trim();
   el.contentEditable = 'true'; el.classList.add('editing'); el.focus();
-  const done = async save=>{
+  const done = save=>{
     el.contentEditable='false'; el.classList.remove('editing');
     const v = el.textContent.trim();
-    if(save && v !== old){
-      patch(id, path, v);
-      saveOv(overrides());
-      flashHint('✓ 已自动保存到本机浏览器，刷新页面后仍会保留。');
-      renderDetail(id); render();
-    } else el.textContent = old;
+    if(save && v !== old){ patch(id, path, v); renderDetail(id); render(); }
+    else el.textContent = old;
   };
   el.onblur = ()=>done(true);
   el.onkeydown = e=>{
@@ -249,7 +232,7 @@ function kvRows(id, obj, base){
   if(!ks.length) return '<div class="none">暂无内容，点击右上「＋ 字段」录入</div>';
   return `<table class="kv">${ks.map(k=>`<tr>
     <th>${esc(k)}</th>
-    <td class="ed" onclick="edit(this,'${id}','${base}.${k}')">${esc(obj[k])}</td>
+    <td class="ed" onclick="edit(this,'${id}','${base}.${k}')">${(base==='facts'&&k==='头像'&&obj[k])?`<img class="kv-av" src="${esc(obj[k])}" alt="">`:''}${esc(obj[k])}</td>
   </tr>`).join('')}</table>`;
 }
 
@@ -299,32 +282,35 @@ function renderDetail(id){
     </div>`).join('') : '<div class="none">暂无推断</div>';
 
   const pos = p.position || {};
+  const _chance = nList(pos.chance), _risk = nList(pos.risk);
   const posBox = `<div class="two">
-    <div class="pcol ok"><h4>机会</h4>${(pos.chance||[]).length
-      ? `<ul>${pos.chance.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`
+    <div class="pcol ok"><h4>机会</h4>${_chance.length
+      ? `<ul>${_chance.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`
       : '<div class="none">无</div>'}</div>
-    <div class="pcol bad"><h4>风险</h4>${(pos.risk||[]).length
-      ? `<ul>${pos.risk.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`
+    <div class="pcol bad"><h4>风险</h4>${_risk.length
+      ? `<ul>${_risk.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`
       : '<div class="none">无</div>'}</div></div>`;
 
   const pl = p.plan || {};
+  const _why = arr(pl.opener_why), _rounds = nRounds(pl.rounds),
+        _inv = arr(pl.invite_rules), _stop = nStop(pl.stop_rules);
   const planBox = `
     <div class="pl-stage"><em>阶段定位</em><span class="ed" onclick="edit(this,'${id}','plan.stage')">${esc(pl.stage)||'—'}</span></div>
     ${pl.opener?`<div class="opener"><div class="op-tag">破冰消息</div>
       <div class="op-txt ed" onclick="edit(this,'${id}','plan.opener')">${esc(pl.opener)}</div>
-      ${(pl.opener_why||[]).length?`<ul class="why">${pl.opener_why.map(w=>`<li>${esc(w)}</li>`).join('')}</ul>`:''}
+      ${_why.length?`<ul class="why">${_why.map(w=>`<li>${esc(w)}</li>`).join('')}</ul>`:''}
     </div>`:''}
-    ${(pl.rounds||[]).length?`<table class="tb"><thead><tr><th style="width:42px">轮</th>
+    ${_rounds.length?`<table class="tb"><thead><tr><th style="width:42px">轮</th>
       <th style="width:30%">目标</th><th>关键话</th></tr></thead><tbody>
-      ${pl.rounds.map((r,i)=>`<tr><td class="dim">${r.n||i+1}</td>
+      ${_rounds.map((r,i)=>`<tr><td class="dim">${r.n||i+1}</td>
         <td>${esc(r.goal)}</td>
         <td class="ed" onclick="edit(this,'${id}','plan.rounds.${i}.line')">${esc(r.line)}</td></tr>`).join('')}
       </tbody></table>`:''}
     <div class="two" style="margin-top:14px">
-      <div class="pcol"><h4>邀约纪律</h4>${(pl.invite_rules||[]).length
-        ?`<ul>${pl.invite_rules.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`:'<div class="none">无</div>'}</div>
-      <div class="pcol bad"><h4>降速 / 止损</h4>${(pl.stop_rules||[]).length
-        ?`<ul>${pl.stop_rules.map(s=>`<li><b>${esc(s.signal)}</b> → ${esc(s.action)}</li>`).join('')}</ul>`
+      <div class="pcol"><h4>邀约纪律</h4>${_inv.length
+        ?`<ul>${_inv.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`:'<div class="none">无</div>'}</div>
+      <div class="pcol bad"><h4>降速 / 止损</h4>${_stop.length
+        ?`<ul>${_stop.map(s=>`<li><b>${esc(s.signal)}</b> → ${esc(s.action)}</li>`).join('')}</ul>`
         :'<div class="none">无</div>'}</div>
     </div>`;
 
@@ -343,16 +329,11 @@ function renderDetail(id){
   <div class="d-top">
     <button class="btn" onclick="backToList()">← 返回列表</button>
     <div style="flex:1"></div>
-    <button class="btn" onclick="rebuildHint()">📋 数据写入说明</button>
-    <button class="btn" onclick="clearEdits('${id}')">恢复原值</button>
     <button class="btn" onclick="delProfile('${id}')" style="color:var(--stop)">删除档案</button>
-  </div>
-  <div style="background:rgba(212,166,86,.08);border:1px solid rgba(212,166,86,.25);border-radius:8px;padding:8px 12px;margin:8px 0;font-size:12px;color:var(--gold);line-height:1.5" id="libStatus">
-    静态看板：数据来自本目录 data/db.js；Agent 写入并重建后刷新页面。
   </div>
 
   <div class="hero">
-    <div class="av lg">${esc(p.name.slice(0,1))}</div>
+    ${avHtml(p,' lg')}
     <div class="hero-m">
       <h1 class="ed" onclick="edit(this,'${id}','name')">${esc(p.name)}</h1>
       <div class="hero-s">
@@ -388,5 +369,5 @@ function renderDetail(id){
 }
 
 /* ---------- 启动 ---------- */
-refreshStaticBoard();
+render();
 

@@ -1,0 +1,19 @@
+{
+  "relay": {
+    "baseUrl": "https://api.foundfutureai.cn/v1",
+    "apiKey": "",
+    "model": "gpt-5.6-sol",
+    "visionModel": "gpt-6-astra"
+  },
+  "embedding": {
+    "provider": "cloud",
+    "baseUrl": "https://dalang.wenmingjianyuce.cn",
+    "apiKey": "",
+    "model": "text-embedding-3-small"
+  },
+  "jev": {
+    "baseUrl": "https://api.foundfutureai.cn/v1",
+    "apiKey": "",
+    "model": "jev-latest"
+  }
+}

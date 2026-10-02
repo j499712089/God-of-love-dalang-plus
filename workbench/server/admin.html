@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>恋爱之神工作台 · 管理后台</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --line: #e6e8eb;
+    --text: #1f2430;
+    --muted: #7a8090;
+    --accent: #14844d;
+    --accent-2: #229b62;
+    --accent-soft: #ebf6ee;
+    --danger: #d64545;
+    --amber: #b7791f;
+    --amber-soft: #fdf3e3;
+    --purple: #7a5af8;
+    --purple-soft: #f1edff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Microsoft YaHei", "PingFang SC", -apple-system, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+  }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; font-size: 14px; }
+  input { font-family: inherit; font-size: 14px; }
+  .hidden { display: none !important; }
+
+  /* ---------- 登录 ---------- */
+  .login-wrap {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(1200px 600px at 50% -10%, #e8f5ee 0%, #f5f6f8 60%);
+  }
+  .login-card {
+    width: 360px; background: var(--card); border: 1px solid var(--line);
+    border-radius: 14px; padding: 34px 32px; box-shadow: 0 12px 40px rgba(20,40,30,.08);
+  }
+  .login-card h1 { font-size: 21px; letter-spacing: .5px; }
+  .login-card .sub { color: var(--muted); font-size: 13px; margin: 6px 0 24px; }
+  .login-card .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--accent); background: var(--accent-soft);
+    font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 20px; margin-bottom: 18px;
+  }
+  .login-card input[type="password"] {
+    width: 100%; border: 1px solid var(--line); border-radius: 9px;
+    padding: 11px 13px; outline: none; transition: border-color .15s;
+  }
+  .login-card input[type="password"]:focus { border-color: var(--accent); }
+  .login-card label {
+    display: flex; align-items: center; gap: 7px; color: var(--muted);
+    font-size: 13px; margin: 14px 0 18px; user-select: none;
+  }
+  .login-card .primary {
+    width: 100%; background: var(--accent); color: #fff; border-radius: 9px;
+    padding: 11px; font-size: 15px; font-weight: 600; transition: background .15s;
+  }
+  .login-card .primary:hover { background: var(--accent-2); }
+  .err { color: var(--danger); font-size: 13px; margin-top: 12px; min-height: 18px; }
+
+  /* ---------- 主框架 ---------- */
+  .app { min-height: 100vh; display: flex; flex-direction: column; }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--card); border-bottom: 1px solid var(--line); padding: 0 24px; height: 58px;
+  }
+  .topbar .brand { font-size: 16px; font-weight: 700; }
+  .topbar .brand span {
+    color: var(--accent); background: var(--accent-soft); font-size: 12px;
+    font-weight: 600; padding: 3px 9px; border-radius: 20px; margin-left: 8px;
+  }
+  .topbar .top-right { display: flex; gap: 10px; }
+  .topbar .top-right button {
+    border: 1px solid var(--line); border-radius: 8px; padding: 7px 14px; color: var(--text);
+  }
+  .topbar .top-right button:hover { background: #f0f2f5; }
+  .tabs {
+    display: flex; gap: 4px; background: var(--card); border-bottom: 1px solid var(--line);
+    padding: 0 24px;
+  }
+  .tabs .tab {
+    padding: 14px 18px; color: var(--muted); font-weight: 600; border-bottom: 2px solid transparent;
+  }
+  .tabs .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  main { flex: 1; padding: 24px; max-width: 1180px; width: 100%; margin: 0 auto; }
+
+  /* ---------- 统计卡片 ---------- */
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  @media (max-width: 900px) { .stat-grid { grid-template-columns: repeat(2, 1fr); } }
+  .stat {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px;
+  }
+  .stat .k { color: var(--muted); font-size: 13px; }
+  .stat .v { font-size: 28px; font-weight: 700; margin-top: 8px; letter-spacing: .3px; }
+  .stat .v small { font-size: 14px; font-weight: 600; color: var(--muted); }
+  .stat .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .stat.accent .v { color: var(--accent); }
+  .stat.purple .v { color: var(--purple); }
+  .stat.amber .v { color: var(--amber); }
+
+  /* ---------- 面板与表格 ---------- */
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 16px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap;
+  }
+  .panel-head h2 { font-size: 15px; font-weight: 700; }
+  .panel-head input {
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; outline: none; min-width: 220px;
+  }
+  .panel-head input:focus { border-color: var(--accent); }
+  .count { color: var(--muted); font-size: 12.5px; margin-left: 4px; font-weight: 500; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { background: #fafbfc; color: var(--muted); font-size: 12.5px; font-weight: 600; }
+  tbody tr:hover { background: #fafbfc; }
+  td.mono { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px; color: var(--muted); }
+  td.num { font-variant-numeric: tabular-nums; }
+  .empty { padding: 40px; text-align: center; color: var(--muted); }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  .badge.ok { color: var(--accent); background: var(--accent-soft); }
+  .badge.pending { color: var(--amber); background: var(--amber-soft); }
+  .link-btn { color: var(--accent); font-weight: 600; padding: 4px 8px; border-radius: 6px; }
+  .link-btn:hover { background: var(--accent-soft); }
+  .link-btn.danger { color: var(--danger); }
+  .link-btn.danger:hover { background: #fdeeee; }
+  .toolbar { display: flex; align-items: center; gap: 8px; }
+
+  /* ---------- 弹窗 ---------- */
+  .modal-mask {
+    position: fixed; inset: 0; background: rgba(20,24,32,.45); display: flex;
+    align-items: center; justify-content: center; z-index: 50;
+  }
+  .modal {
+    background: var(--card); border-radius: 12px; width: 380px; padding: 24px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.2);
+  }
+  .modal h3 { font-size: 16px; margin-bottom: 6px; }
+  .modal .desc { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  .modal input {
+    width: 100%; border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; outline: none;
+  }
+  .modal input:focus { border-color: var(--accent); }
+  .modal .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  .modal .btn {
+    border-radius: 8px; padding: 9px 16px; font-weight: 600;
+  }
+  .modal .btn.primary { background: var(--accent); color: #fff; }
+  .modal .btn.ghost { border: 1px solid var(--line); color: var(--text); }
+  .toast {
+    position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+    background: #1f2430; color: #fff; padding: 10px 18px; border-radius: 8px;
+    font-size: 13px; z-index: 99; opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="loginView" class="login-wrap">
+  <div class="login-card">
+    <span class="badge">● 管理后台</span>
+    <h1>恋爱之神工作台</h1>
+    <p class="sub">用户 · 积分 · 充值订单 管理</p>
+    <input type="password" id="pw" placeholder="管理员密码" autocomplete="current-password" />
+    <label><input type="checkbox" id="remember" checked /> 记住密码（7天内免登录）</label>
+    <button class="primary" id="loginBtn">登 录</button>
+    <p class="err" id="loginErr"></p>
+  </div>
+</div>
+
+<div id="appView" class="app hidden">
+  <header class="topbar">
+    <div class="brand">恋爱之神工作台 <span>管理后台</span></div>
+    <div class="top-right">
+      <button id="refreshBtn">刷新数据</button>
+      <button id="logoutBtn">退出登录</button>
+    </div>
+  </header>
+  <nav class="tabs">
+    <button class="tab active" data-tab="overview">概览</button>
+    <button class="tab" data-tab="users">用户管理</button>
+    <button class="tab" data-tab="orders">订单管理</button>
+  </nav>
+  <main>
+    <section id="overview" class="panel" style="background:transparent;border:none;">
+      <div class="stat-grid" id="statGrid"></div>
+    </section>
+
+    <section id="users" class="panel hidden">
+      <div class="panel-head">
+        <h2>用户管理 <span class="count" id="userCount"></span></h2>
+        <input id="userSearch" placeholder="按邮箱搜索…" />
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>邮箱</th>
+              <th>积分余额</th>
+              <th>向量库</th>
+              <th>注册时间</th>
+              <th>订单 / 已支付</th>
+              <th>累计充值</th>
+              <th>最近下单</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="userTbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="orders" class="panel hidden">
+      <div class="panel-head">
+        <h2>订单管理 <span class="count" id="orderCount"></span></h2>
+        <div class="toolbar">
+          <select id="orderFilter" style="font-family:inherit;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;">
+            <option value="">全部状态</option>
+            <option value="pending_payment">待支付</option>
+            <option value="credited">已到账</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>订单号</th>
+              <th>用户</th>
+              <th>套餐</th>
+              <th>金额</th>
+              <th>到账积分</th>
+              <th>状态</th>
+              <th>下单时间</th>
+              <th>支付时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="orderTbody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="modal-mask hidden" id="modalMask">
+  <div class="modal">
+    <h3 id="modalTitle">调整积分</h3>
+    <p class="desc" id="modalDesc"></p>
+    <input id="modalInput" inputmode="numeric" />
+    <div class="actions">
+      <button class="btn ghost" id="modalCancel">取消</button>
+      <button class="btn primary" id="modalOk">确定</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-mask hidden" id="vectorModalMask">
+  <div class="modal" style="width:400px">
+    <h3>向量库权限</h3>
+    <p class="desc" id="vectorDesc"></p>
+    <p id="vectorStatus" style="font-size:13px;color:var(--muted);margin-bottom:12px"></p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <button class="btn primary" id="vectorToggle">开启 / 关闭</button>
+      <button class="btn ghost" id="vectorForever">设为永久</button>
+      <button class="btn ghost" id="vectorRevoke">撤销权限</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input id="vectorMonths" inputmode="numeric" placeholder="续费月数（如 3）" style="flex:1" />
+      <button class="btn primary" id="vectorAdd">续费</button>
+    </div>
+    <div class="actions">
+      <button class="btn ghost" id="vectorClose">关闭</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (s) { return document.querySelector(s); };
+  var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
+  var TOKEN_KEY = "love_admin_token";
+  var token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || "";
+
+  var loginView = $("#loginView"), appView = $("#appView");
+  var modalMask = $("#modalMask"), toast = $("#toast");
+  var cachedUsers = [], cachedOrders = [];
+
+  function showToast(msg) {
+    toast.textContent = msg; toast.classList.add("show");
+    setTimeout(function () { toast.classList.remove("show"); }, 2200);
+  }
+  function fmtTime(ts) { return ts ? new Date(ts).toLocaleString("zh-CN", { hour12: false }) : "—"; }
+  function fmtYuan(n) { return "¥" + (typeof n === "number" ? n.toFixed(2) : n); }
+
+  function api(path, opts) {
+    opts = opts || {};
+    var headers = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = "Bearer " + token;
+    return fetch(path, { method: opts.method || "GET", headers: headers, body: opts.body ? JSON.stringify(opts.body) : undefined })
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (d) {
+          if (r.status === 401) { logout(); throw new Error(d.error || "登录已过期"); }
+          if (!r.ok) throw new Error(d.error || ("请求失败 " + r.status));
+          return d;
+        });
+      });
+  }
+
+  function showLogin() { loginView.classList.remove("hidden"); appView.classList.add("hidden"); }
+  function showApp() { loginView.classList.add("hidden"); appView.classList.remove("hidden"); }
+
+  function logout() {
+    token = ""; localStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(TOKEN_KEY);
+    showLogin();
+  }
+
+  // ---------- 登录 ----------
+  function doLogin() {
+    var pw = $("#pw").value;
+    if (!pw) { $("#loginErr").textContent = "请输入管理员密码"; return; }
+    $("#loginBtn").disabled = true; $("#loginErr").textContent = "";
+    api("/api/admin/login", { method: "POST", body: { password: pw } })
+      .then(function (d) {
+        token = d.token;
+        if ($("#remember").checked) localStorage.setItem(TOKEN_KEY, token);
+        else sessionStorage.setItem(TOKEN_KEY, token);
+        $("#pw").value = "";
+        showApp(); loadAll();
+      })
+      .catch(function (e) { $("#loginErr").textContent = e.message || "登录失败"; })
+      .finally(function () { $("#loginBtn").disabled = false; });
+  }
+  $("#loginBtn").addEventListener("click", doLogin);
+  $("#pw").addEventListener("keydown", function (e) { if (e.key === "Enter") doLogin(); });
+  $("#logoutBtn").addEventListener("click", logout);
+  $("#refreshBtn").addEventListener("click", loadAll);
+
+  // ---------- 数据加载 ----------
+  function loadAll() { loadOverview(); loadUsers(); loadOrders(); }
+
+  function loadOverview() {
+    api("/api/admin/overview").then(function (d) {
+      var cards = [
+        { k: "总用户数", v: d.totalUsers, hint: "今日新增 " + d.todayNewUsers, cls: "" },
+        { k: "存量积分总额", v: d.totalCredits, hint: "所有用户账户余额合计", cls: "accent" },
+        { k: "累计实收", v: fmtYuan(d.revenue), hint: "已到账订单 · 今日 " + fmtYuan(d.todayRevenue), cls: "" },
+        { k: "待支付订单", v: d.pendingOrders, hint: "待收金额 " + fmtYuan(d.pendingAmount), cls: "amber" },
+        { k: "总订单数", v: d.totalOrders, hint: "已到账 " + d.paidOrders + " 单", cls: "purple" },
+        { k: "今日订单", v: d.todayOrders, hint: "下单 / 支付实时", cls: "" },
+      ];
+      $("#statGrid").innerHTML = cards.map(function (c) {
+        return '<div class="stat ' + c.cls + '"><div class="k">' + c.k + '</div><div class="v">' + c.v + '</div><div class="hint">' + c.hint + '</div></div>';
+      }).join("");
+    }).catch(function (e) { showToast(e.message); });
+  }
+
+  function loadUsers() {
+    api("/api/admin/users").then(function (d) {
+      cachedUsers = d.users || [];
+      renderUsers(cachedUsers);
+    }).catch(function (e) { showToast(e.message); });
+  }
+
+  function renderUsers(list) {
+    $("#userCount").textContent = "共 " + list.length + " 人";
+    if (!list.length) {
+      $("#userTbody").innerHTML = '<tr><td colspan="8" class="empty">暂无用户（有人注册后这里会出现）</td></tr>';
+      return;
+    }
+    $("#userTbody").innerHTML = list.map(function (u) {
+      return '<tr>' +
+        '<td>' + escapeHtml(u.email) + '</td>' +
+        '<td class="num" style="font-weight:700;color:var(--accent)">' + u.credits + '</td>' +
+        '<td>' + vectorLabel(u) + '</td>' +
+        '<td class="num">' + fmtTime(u.createdAt) + '</td>' +
+        '<td class="num">' + u.orderCount + ' / ' + u.paidOrderCount + '</td>' +
+        '<td class="num">' + fmtYuan(u.totalPaidYuan) + '</td>' +
+        '<td class="num">' + (u.lastOrderAt ? fmtTime(u.lastOrderAt) : "—") + '</td>' +
+        '<td><button class="link-btn" data-act="credits" data-id="' + u.id + '" data-email="' + escapeHtml(u.email) + '">调整积分</button>' +
+        ' <button class="link-btn" data-act="vector" data-id="' + u.id + '" data-email="' + escapeHtml(u.email) + '">向量权限</button></td>' +
+        '</tr>';
+    }).join("");
+  }
+
+  function vectorLabel(u) {
+    if (u.vectorEnabled === false)
+      return '<span class="badge pending">已关闭</span>';
+    if (u.vectorUnlimited)
+      return '<span class="badge ok">永久</span>';
+    if (u.vectorActive)
+      return '<span class="badge ok">' + fmtTime(u.vectorExpiresAt) + '</span>';
+    return '<span class="badge pending">未订阅 / 已过期</span>';
+  }
+
+  function loadOrders() {
+    api("/api/admin/orders").then(function (d) {
+      cachedOrders = d.orders || [];
+      renderOrders(cachedOrders);
+    }).catch(function (e) { showToast(e.message); });
+  }
+
+  function renderOrders(list) {
+    var f = $("#orderFilter").value;
+    var filtered = f ? list.filter(function (o) { return o.status === f; }) : list;
+    $("#orderCount").textContent = "共 " + filtered.length + " 单";
+    if (!filtered.length) {
+      $("#orderTbody").innerHTML = '<tr><td colspan="9" class="empty">暂无订单</td></tr>';
+      return;
+    }
+    $("#orderTbody").innerHTML = filtered.map(function (o) {
+      var st = o.status === "credited"
+        ? '<span class="badge ok">已到账</span>'
+        : '<span class="badge pending">待支付</span>';
+      var action = o.status === "credited"
+        ? '<span style="color:var(--muted);font-size:12px">—</span>'
+        : '<button class="link-btn" data-act="confirm" data-id="' + o.orderId + '">确认到账</button>';
+      var creditCell = o.kind === "vector"
+        ? '<td class="num" style="color:var(--purple)">+' + o.months + ' 月</td>'
+        : '<td class="num">+' + o.finalCredits + '</td>';
+      var nameCell = o.kind === "vector"
+        ? '<span class="badge" style="background:var(--purple-soft);color:var(--purple);margin-right:6px">向量</span>' + escapeHtml(o.packageName)
+        : escapeHtml(o.packageName);
+      return '<tr>' +
+        '<td class="mono">' + o.orderId + '</td>' +
+        '<td>' + escapeHtml(o.email) + '</td>' +
+        '<td>' + nameCell + '</td>' +
+        '<td class="num">' + fmtYuan(o.priceYuan) + '</td>' +
+        creditCell +
+        '<td>' + st + '</td>' +
+        '<td class="num">' + fmtTime(o.createdAt) + '</td>' +
+        '<td class="num">' + fmtTime(o.paidAt) + '</td>' +
+        '<td>' + action + '</td>' +
+        '</tr>';
+    }).join("");
+  }
+
+  // ---------- 操作：调整积分 / 确认到账 ----------
+  var modalState = null;
+  function openModal(title, desc, placeholder, onOk) {
+    $("#modalTitle").textContent = title;
+    $("#modalDesc").textContent = desc;
+    $("#modalInput").value = ""; $("#modalInput").placeholder = placeholder;
+    modalState = onOk;
+    modalMask.classList.remove("hidden");
+    $("#modalInput").focus();
+  }
+  function closeModal() { modalMask.classList.add("hidden"); modalState = null; }
+  $("#modalCancel").addEventListener("click", closeModal);
+  $("#modalMask").addEventListener("click", function (e) { if (e.target === modalMask) closeModal(); });
+  $("#modalOk").addEventListener("click", function () {
+    if (modalState) modalState($("#modalInput").value);
+  });
+  $("#modalInput").addEventListener("keydown", function (e) { if (e.key === "Enter" && modalState) modalState($("#modalInput").value); });
+
+  document.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-act]");
+    if (!btn) return;
+    var act = btn.getAttribute("data-act");
+    if (act === "credits") {
+      var uid = btn.getAttribute("data-id");
+      var email = btn.getAttribute("data-email");
+      openModal("调整积分 · " + email, "正数加积分、负数扣积分（余额最低到 0）。", "例如 +500 或 -200", function (val) {
+        var delta = parseInt(val, 10);
+        if (isNaN(delta)) { showToast("请输入数字"); return; }
+        api("/api/admin/users/" + uid + "/credits", { method: "POST", body: { delta: delta } })
+          .then(function (d) { closeModal(); showToast("已调整：余额 " + d.credits); loadUsers(); loadOverview(); })
+          .catch(function (err) { showToast(err.message); });
+      });
+    } else if (act === "confirm") {
+      var oid = btn.getAttribute("data-id");
+      if (!confirm("手动确认该订单已到账？将给对应用户加积分（幂等）。")) return;
+      api("/api/admin/orders/" + oid + "/confirm", { method: "POST" })
+        .then(function (d) { showToast(d.duplicate ? "订单已到账（重复操作）" : "已确认到账"); loadOrders(); loadOverview(); loadUsers(); })
+        .catch(function (err) { showToast(err.message); });
+    } else if (act === "vector") {
+      openVector(btn.getAttribute("data-id"), btn.getAttribute("data-email"));
+    }
+  });
+
+  // ---------- 向量库权限弹窗 ----------
+  var vectorUid = "";
+  function openVector(uid, email) {
+    vectorUid = uid;
+    var u = cachedUsers.filter(function (x) { return x.id === uid; })[0] || {};
+    $("#vectorDesc").textContent = email || "";
+    renderVectorStatus(u);
+    $("#vectorModalMask").classList.remove("hidden");
+  }
+  function renderVectorStatus(u) {
+    var s;
+    if (u.vectorEnabled === false) s = "状态：已关闭（无调用权限）";
+    else if (u.vectorUnlimited) s = "状态：永久权限";
+    else if (u.vectorActive) s = "状态：可用，到期 " + fmtTime(u.vectorExpiresAt);
+    else s = "状态：未订阅 / 已过期";
+    s += u.vectorKeyMask ? "　key：" + u.vectorKeyMask : "";
+    $("#vectorStatus").textContent = s;
+  }
+  function vectorApi(body) {
+    return api("/api/admin/users/" + vectorUid + "/vector", { method: "POST", body: body })
+      .then(function (d) {
+        showToast("已更新向量权限");
+        loadUsers();
+        var u = cachedUsers.filter(function (x) { return x.id === vectorUid; })[0] || {};
+        renderVectorStatus(d);
+      })
+      .catch(function (err) { showToast(err.message); });
+  }
+  $("#vectorClose").addEventListener("click", function () { $("#vectorModalMask").classList.add("hidden"); });
+  $("#vectorModalMask").addEventListener("click", function (e) { if (e.target === this) this.classList.add("hidden"); });
+  $("#vectorToggle").addEventListener("click", function () {
+    var u = cachedUsers.filter(function (x) { return x.id === vectorUid; })[0] || {};
+    vectorApi({ enabled: u.vectorEnabled === false });
+  });
+  $("#vectorForever").addEventListener("click", function () { vectorApi({ expiresAt: -1 }); });
+  $("#vectorRevoke").addEventListener("click", function () { vectorApi({ expiresAt: 0 }); });
+  $("#vectorAdd").addEventListener("click", function () {
+    var m = parseInt($("#vectorMonths").value, 10);
+    if (isNaN(m) || m <= 0) { showToast("请输入正整数月数"); return; }
+    vectorApi({ months: m });
+    $("#vectorMonths").value = "";
+  });
+
+  // ---------- 搜索 / 过滤 / 标签切换 ----------
+  $("#userSearch").addEventListener("input", function () {
+    var q = this.value.trim().toLowerCase();
+    renderUsers(q ? cachedUsers.filter(function (u) { return u.email.toLowerCase().indexOf(q) >= 0; }) : cachedUsers);
+  });
+  $("#orderFilter").addEventListener("change", function () { renderOrders(cachedOrders); });
+  $$(".tab").forEach(function (t) {
+    t.addEventListener("click", function () {
+      $$(".tab").forEach(function (x) { x.classList.remove("active"); });
+      t.classList.add("active");
+      ["overview", "users", "orders"].forEach(function (k) {
+        $("#" + k).classList.toggle("hidden", k !== t.getAttribute("data-tab"));
+      });
+    });
+  });
+
+  function escapeHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  // ---------- 启动 ----------
+  if (token) {
+    showApp(); loadAll();
+  } else {
+    showLogin();
+  }
+})();
+</script>
+</body>
+</html>

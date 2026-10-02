@@ -1,21 +1,40 @@
-# 依赖
-node_modules/
-package-lock.json
+> 本目录已脱敏，可直接发布。**发布前请先读 `README.md` 的「隐私与数据安全」一节。**
 
-# 系统垃圾文件
+# 依赖与构建产物
+node_modules/
+dist/
+.runtime/
+artifacts/
+
+# 密钥与本地配置 —— 绝对不要提交
+.env
+.env.*
+!.env.example
+**/server/config.json
+**/.dalang/config.json
+**/library.json
+
+# 个人档案数据（只保留空骨架，真实档案永不入库）
+profile_db/data/profiles/*.json
+profile_db/data/index.json
+profile_db/data/db.js
+profile_db/data/_backup_*/
+workbench/profile_db/data/profiles/*.json
+workbench/profile_db/data/index.json
+workbench/profile_db/data/db.js
+workbench/profile_db/data/_backup_*/
+
+# 历史备份与临时文件
+SKILL.md.bak-*
+*.bak
+*.bak-*
+*.tmp
+*.log
+
+# 系统与编辑器
 .DS_Store
 Thumbs.db
 desktop.ini
-
-# 本机密钥与私有配置（绝不上传）
-.dalang/
-config.json
-.env
-.env.*
-*.key
-*.license
-
-# 日志与临时文件
-*.log
-*.tmp
-.cache/
+.idea/
+.vscode/
+*.swp
