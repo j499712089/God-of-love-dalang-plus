@@ -38,6 +38,7 @@ async function callChat(
   json: boolean,
   signal: AbortSignal,
   maxTokens?: number,
+  stream = false,
 ): Promise<Response> {
   return fetch(`${base}/chat/completions`, {
     method: "POST",
@@ -52,9 +53,82 @@ async function callChat(
       // 显式给足输出预算：不传时上游按渠道默认截断，长 JSON 输出会被切在半截
       ...(maxTokens ? { max_tokens: maxTokens } : {}),
       ...(json ? { response_format: { type: "json_object" } } : {}),
+      // 流式是防 Cloudflare 524 的根治手段：非流式时推理模型长输出易超
+      // CF 100 秒源站硬限制被掐断（返回 524 HTML）；流式首字节秒回，
+      // 只要数据在流动 CF 就不会断。stream_options 让末帧带回 usage。
+      ...(stream ? { stream: true, stream_options: { include_usage: true } } : {}),
     }),
     signal,
   });
+}
+
+type StreamParsed = {
+  content: string;
+  model: string;
+  usage: TokenUsage;
+};
+
+/** 解析 OpenAI 兼容 SSE 流：逐帧累加 delta.content，usage/model 取携带的帧。
+ *  onToken 回调（可选）在每帧 delta 到达时触发，供上游做流式推送到客户端。 */
+async function readSSE(
+  resp: Response,
+  onToken?: (delta: string) => void,
+): Promise<StreamParsed> {
+  const body = resp.body;
+  if (!body) throw new RelayError("中转站流式响应为空", 502);
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  let content = "";
+  let model = "";
+  let finishReason = "";
+  const usage: TokenUsage = { input_tokens: 0, output_tokens: 0, cache_hit_tokens: 0 };
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    // SSE 以空行分帧；按行处理更稳（兼容 \r\n）
+    let idx: number;
+    while ((idx = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, idx).replace(/\r$/, "");
+      buf = buf.slice(idx + 1);
+      if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === "[DONE]") continue;
+      try {
+        const chunk = JSON.parse(payload) as {
+          model?: string;
+          choices?: { delta?: { content?: string }; finish_reason?: string }[];
+          usage?: {
+            prompt_tokens?: number;
+            completion_tokens?: number;
+            prompt_tokens_details?: { cached_tokens?: number };
+          } | null;
+        };
+        const delta = chunk.choices?.[0]?.delta?.content;
+        if (typeof delta === "string") {
+          content += delta;
+          onToken?.(delta);
+        }
+        if (chunk.choices?.[0]?.finish_reason) finishReason = chunk.choices[0].finish_reason;
+        if (chunk.model) model = chunk.model;
+        if (chunk.usage) {
+          usage.input_tokens = chunk.usage.prompt_tokens ?? 0;
+          usage.output_tokens = chunk.usage.completion_tokens ?? 0;
+          usage.cache_hit_tokens = chunk.usage.prompt_tokens_details?.cached_tokens ?? 0;
+        }
+      } catch {
+        /* 单帧解析失败跳过，不影响整体 */
+      }
+    }
+  }
+  // 截断检测：长 JSON 被切半截时，下游解析只会报「无法解析」，必须在这里给出真因
+  if (finishReason === "length")
+    throw new RelayError(
+      `模型输出被截断（finish_reason=length，已输出 ${usage.output_tokens || "?"} tokens）——请减少图片数量或分批处理`,
+      502,
+    );
+  return { content, model, usage };
 }
 
 /** 模型名大小写纠正：new-api 渠道按精确模型名匹配，配错大小写会 model_not_found。 */
@@ -96,6 +170,8 @@ export async function chatCompletion(
     maxTokens?: number;
     /** 用量回调：每次成功返回都会带上本次 TokenUsage，供上游（路由层）汇总扣费 */
     onUsage?: (usage: TokenUsage) => void;
+    /** 流式逐 token 回调：每个 delta 到达时触发，供 /api/chat 推 SSE 到前端边收边显示 */
+    onToken?: (delta: string) => void;
   },
 ): Promise<RelayResult> {
   const config = loadConfig();
@@ -104,6 +180,9 @@ export async function chatCompletion(
   const base = config.relay.baseUrl.replace(/\/+$/, "");
   // 带图请求自动切视觉模型（主模型渠道大概率不支持 vision，2026-09-24 实测）
   const model = opts?.vision && config.relay.visionModel ? config.relay.visionModel : config.relay.model;
+  // 流式仅在「调用方显式要 onToken」且「非视觉读图」时启用：视觉渠道对 stream 支持不稳，
+  // 且图片结果无逐字流式意义，保持一次性 JSON 解析更稳。
+  const useStream = !!opts?.onToken && !opts?.vision;
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),
@@ -121,6 +200,7 @@ export async function chatCompletion(
       opts?.json ?? false,
       signal,
       opts?.maxTokens,
+      useStream,
     );
     let errText = "";
     if (!resp.ok && [404, 503].includes(resp.status)) {
@@ -141,6 +221,7 @@ export async function chatCompletion(
             opts?.json ?? false,
             signal,
             opts?.maxTokens,
+            useStream,
           );
           // 自愈成功：把正确大小写的模型名回写配置，下次直接命中
           if (resp.ok) {
@@ -234,6 +315,19 @@ export async function chatCompletion(
         `中转站返回 ${resp.status}${errText ? `：${errText.slice(0, 200)}` : ""}`,
         resp.status,
       );
+    }
+    // 成功：流式请求优先按 SSE 解析；非流式 / 中转站不支持流式（非 event-stream）自动回退一次性 JSON
+    const ctype = resp.headers.get("content-type") || "";
+    if (useStream && ctype.includes("text/event-stream")) {
+      const parsed = await readSSE(resp, opts?.onToken);
+      if (!parsed.content)
+        throw new RelayError("中转站流式响应内容为空", 502);
+      opts?.onUsage?.(parsed.usage);
+      return {
+        content: parsed.content,
+        model: parsed.model || model,
+        usage: parsed.usage,
+      };
     }
     const data = (await resp.json()) as {
       choices?: { message?: { content?: string | null }; finish_reason?: string }[];

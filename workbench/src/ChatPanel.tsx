@@ -100,6 +100,7 @@ export default function ChatPanel({
 }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState("");
   const [vectorActive, setVectorActive] = useState<boolean | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -112,6 +113,7 @@ export default function ChatPanel({
     setMsgs(next);
     setInput("");
     setBusy(true);
+    setStreaming(false);
     setError("");
     try {
       const resp = await apiFetch("/api/chat", {
@@ -123,18 +125,73 @@ export default function ChatPanel({
           chatLog,
           relation,
           analysisSummary,
+          stream: true,
         }),
       });
-      const body = await resp.json();
-      if (!resp.ok) throw new Error(body.error || "对话失败");
-      setVectorActive(body.vectorActive === false ? false : body.vectorActive === true ? true : null);
-      setMsgs([...next, { role: "assistant", content: body.reply }]);
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => null);
+        throw new Error(body?.error || `对话失败（${resp.status}）`);
+      }
+      const ctype = resp.headers.get("content-type") || "";
+      if (!ctype.includes("text/event-stream") || !resp.body) {
+        // 兜底：后端老逻辑仍返回 json
+        const body = await resp.json();
+        setVectorActive(body.vectorActive === false ? false : body.vectorActive === true ? true : null);
+        setMsgs([...next, { role: "assistant", content: body.reply ?? "" }]);
+        return;
+      }
+      // 流式：逐帧 JSON 解析 delta，边收边显示
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let acc = "";
+      let streamError = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let idx: number;
+        while ((idx = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, idx).replace(/\r$/, "");
+          buf = buf.slice(idx + 1);
+          if (!line.startsWith("data:")) continue;
+          const payload = line.slice(5).trim();
+          if (!payload || payload === "[DONE]") continue;
+          let obj: {
+            delta?: string;
+            done?: boolean;
+            error?: string;
+            vectorActive?: boolean;
+          };
+          try {
+            obj = JSON.parse(payload);
+          } catch {
+            continue;
+          }
+          if (typeof obj.delta === "string") {
+            acc += obj.delta;
+            setStreaming(true);
+            setMsgs([...next, { role: "assistant", content: acc }]);
+          } else if (obj.error) {
+            streamError = obj.error;
+          } else if (obj.done) {
+            setVectorActive(obj.vectorActive === false ? false : obj.vectorActive === true ? true : null);
+          }
+        }
+      }
+      if (streamError) {
+        setError(streamError);
+        setMsgs(acc ? [...next, { role: "assistant", content: acc }] : next);
+        return;
+      }
+      setMsgs([...next, { role: "assistant", content: acc }]);
     } catch (e) {
       setError((e as Error).message);
       // 失败时把这条用户消息保留，方便重发
       setMsgs(next);
     } finally {
       setBusy(false);
+      setStreaming(false);
     }
   }
 
@@ -191,7 +248,7 @@ export default function ChatPanel({
             </div>
           </div>
         ))}
-        {busy && (
+        {busy && !streaming && (
           <div className="cp-msg assistant">
             <div className="cp-bubble cp-thinking">
               <Loader2 size={14} className="spin" /> 大浪在想…

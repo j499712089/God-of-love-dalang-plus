@@ -8,7 +8,7 @@ import { analyze } from "./analysis";
 import { testJev } from "./jev";
 import { loadConfig, saveConfig, publicConfig, LOCAL_MODE, type AppConfig } from "./config";
 import { vectorService } from "./vector";
-import { chatCompletion, type TokenUsage } from "./relay";
+import { chatCompletion, type TokenUsage, type ChatMessage } from "./relay";
 import { extractProfile, ocrChat, synthesizeDeep, generateOpener } from "./vision";
 import * as profile from "./profile";
 import {
@@ -590,6 +590,8 @@ const chatSchema = z.object({
   relation: z.enum(["crush", "new", "couple"]).optional(),
   /** 聊天记录已由结构化分析线（六维/情绪/意图）产出结论，直接引用，不重复分析 */
   analysisSummary: z.string().max(2000).optional(),
+  /** 流式传输：true 时返回 SSE 逐字推送到前端，边收边显示 */
+  stream: z.boolean().optional(),
 });
 
 app.post("/api/chat", authMiddleware, async (req, res) => {
@@ -626,7 +628,7 @@ app.post("/api/chat", authMiddleware, async (req, res) => {
     res.status(402).json({ error: "积分不足" });
     return;
   }
-  const { messages, profileId, chatLog, relation, analysisSummary } =
+  const { messages, profileId, chatLog, relation, analysisSummary, stream } =
     valid.data;
   // 🔴 铁律（2026-09-27 用户要求）：大浪指导必须基于「资料卡 + 聊天记录」全面分析，
   // 缺任何一项直接拒绝，禁止不看资料、不看聊天就凭模型瞎答（记忆错乱/编造的源头）。
@@ -728,17 +730,60 @@ app.post("/api/chat", authMiddleware, async (req, res) => {
   res.on("close", () => {
     if (!res.writableEnded) controller.abort();
   });
+  // SSE 帧写出：data: <json>\n\n，前端逐帧 JSON.parse 累加 delta
+  const writeSSE = (obj: unknown) =>
+    res.write(`data: ${JSON.stringify(obj)}\n\n`);
+  const chatMessages: ChatMessage[] = [
+    { role: "system", content: system },
+    ...messages.slice(-16).map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    })),
+  ];
+  if (stream) {
+    // 流式：先落 SSE 头，再逐 token 推给前端（边收边显示，根治长输出等待）
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
+    let streamedAny = false;
+    try {
+      const { content, usage } = await chatCompletion(chatMessages, {
+        signal: controller.signal,
+        timeoutMs: 300000,
+        onToken: (delta) => {
+          streamedAny = true;
+          writeSSE({ delta });
+        },
+      });
+      // 上游非流式兜底：onToken 没触发过，整段一次性补发
+      if (!streamedAny && content) writeSSE({ delta: content });
+      // 扣费（与一次性 JSON 路径一致），credits 随结束帧带给前端
+      let credits: number | undefined;
+      try {
+        ({ credits } = deductCredits(req.userId as string, usage));
+      } catch {
+        /* 扣费失败不阻塞流式结果 */
+      }
+      writeSSE({ done: true, credits, vectorActive: vectorAllowed });
+      res.end();
+    } catch (error) {
+      const status = Number((error as { status?: number }).status) || 502;
+      if (!controller.signal.aborted)
+        writeSSE({
+          error:
+            (error as Error).message ||
+            (status >= 400 && status < 600 ? "对话失败，请重试" : "对话失败，请重试"),
+        });
+      res.end();
+    }
+    return;
+  }
   try {
-    const { content, usage } = await chatCompletion(
-      [
-        { role: "system", content: system },
-        ...messages.slice(-16).map((m) => ({
-          role: m.role as "user" | "assistant",
-          content: m.content,
-        })),
-      ],
-      { signal: controller.signal, timeoutMs: 120000 },
-    );
+    const { content, usage } = await chatCompletion(chatMessages, {
+      signal: controller.signal,
+      timeoutMs: 120000,
+    });
     const { credits } = deductCredits(req.userId as string, usage);
     res.json({ reply: content, credits, vectorActive: vectorAllowed });
   } catch (error) {
